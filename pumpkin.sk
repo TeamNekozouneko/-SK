@@ -1,0 +1,124 @@
+Options:
+    p: &6&l🎃 かぼちゃ取り大会 &e&l|
+
+on load:
+    if {pumpkin::status} is not set:
+        set {pumpkin::status} to "stopping"
+    if {pumpkin::gametime} is not set:
+        set {pumpkin::gametime} to 180
+
+command /pumpkin [<text>] [<integer>]:
+    permission: skript.pumpkin.admin
+    trigger:
+        if arg-1 is not set:
+            pumpkin_show_help(player)
+        else if arg-1 is "start":
+            pumpkin_start(player)
+        else if arg-1 is "stop":
+            pumpkin_stop(true)
+        else if arg-1 is "settime":
+            if arg-2 is not set:
+                pumpkin_show_help(player)
+            else:
+                pumpkin_settime(player, arg-2)
+        else:
+            pumpkin_show_help(player)
+
+function pumpkin_settime(p: player, time: integer):
+    send "{@p} &a試合時間を%{_time}%秒に設定しました。" to all players
+    set {pumpkin::gametime} to {_time}
+
+function pumpkin_start(p: player):
+    if {pumpkin::status} is not "stopping":
+        send "{@p} &cゲームが開始可能状態にありません。" to {_p}
+        exit
+    send title "&6&l🎃かぼちゃ取り大会" with subtitle "&a&l&nかぼちゃ取りのトップになれ！" to all players
+    play sound "minecraft:block.anvil.place" to all players
+    set {pumpkin::status} to "starting"
+    wait a second
+    set {_n} to 5
+    loop 5 times:
+        send "{@p} &a開始まで %{_n}%秒前..." to all players
+        play sound "block.note_block.harp" to all players
+        remove 1 from {_n}
+        wait a second
+    
+    pumpkin_reset()
+    play sound "block.note_block.bass" to all players
+    
+    set {pumpkin::status} to "running"
+    set {pumpkin::currenttime} to {pumpkin::gametime}
+    loop {pumpkin::gametime} times:
+        if {pumpkin::status} is not "running":
+            exit loop
+        remove 1 from {pumpkin::currenttime}
+        wait a second
+    
+    pumpkin_stop(false)
+
+
+function pumpkin_reset():
+    clear {pumpkin::players::*}
+
+function pumpkin_stop(is_forced: boolean):
+    if {pumpkin::status} is not "running":
+        send "{@p} &cゲームが強制終了可能状態にありません。" to {_p}
+        exit
+    if {_is_forced} is true:
+        send "{@p} &c&l運営によってゲームが強制終了されました。" to all players
+    
+    loop 3 times:
+        play sound "block.note_block.bell" to all players
+        wait 2 tick
+
+    loop {pumpkin::players::*}:
+        set {_points::%loop-index%} to loop-value
+
+    loop {pumpkin::players::*}:
+        continue if max({pumpkin::players::*}) is not loop-value
+        set {_1st_player} to loop-index parsed as player
+        set {_1st_num} to loop-value
+        remove loop-value from {pumpkin::players::*}
+    loop {pumpkin::players::*}:
+        continue if max({pumpkin::players::*}) is not loop-value
+        set {_2nd_player} to loop-index parsed as player
+        set {_2nd_num} to loop-value
+        remove loop-value from {pumpkin::players::*}
+    loop {pumpkin::players::*}:
+        continue if max({pumpkin::players::*}) is not loop-value
+        set {_3rd_player} to loop-index parsed as player
+        set {_3rd_num} to loop-value
+        remove loop-value from {pumpkin::players::*}
+
+
+    send "{@p} &7- &a&l結果発表" to all players
+    loop all players:
+        send "&6&l1位&7: &b%{_1st_player}% &7(&b%{_1st_num}%ポイント&7)" to loop-player if {_1st_player} is set
+        send "&e&l2位&7: &b%{_2nd_player}% &7(&b%{_2nd_num}%ポイント&7)" to loop-player if {_2nd_player} is set
+        send "&b&l3位&7: &b%{_3rd_player}% &7(&b%{_3rd_num}%ポイント&7)" to loop-player if {_3rd_player} is set
+        set {_0} to 0
+        set {_0} to {_points::%loop-player%} if {_points::%loop-player%} is set
+        send "&aこの試合であなたは %{_0}% ポイント獲得しました。" to loop-player
+
+    set {pumpkin::status} to "stopping"
+    pumpkin_reset()
+
+function pumpkin_show_help(p: player):
+    send "{@p} &b&lヘルプ" to {_p}
+    send "&3&l・&b/pumpkin start &7- &bゲームをスタートします。" to {_p}
+    send "&3&l・&b/pumpkin stop &7- &bゲームを強制停止します。" to {_p}
+    send "&3&l・&b/pumpkin settime <値（秒）> &7- &bゲーム時間を設定します。" to {_p}
+
+on break:
+    exit if event-block is not pumpkin
+    exit if {pumpkin::status} is not "running"
+    add 1 to {pumpkin::players::%player%}
+    play sound "minecraft:entity.experience_orb.pickup" to player
+    send title "" with subtitle "&a&l&n+ 1ポイント" to player
+
+every second:
+    exit if {pumpkin::status} is not "running"
+    loop all players:
+        set {_0} to 0
+        set {_0} to {pumpkin::players::%loop-player%} if {pumpkin::players::%loop-player%} is set
+        send action bar "&6&l🎃 かぼちゃ取り大会が開催中！ &7| &aあなたのポイント&7: &a%{_0}% &7| &a残り時間&7: &a%{pumpkin::currenttime}%秒" to loop-player
